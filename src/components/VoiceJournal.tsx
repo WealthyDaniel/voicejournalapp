@@ -501,7 +501,7 @@ function JournalApp({ onLock }: { onLock: () => void }) {
                         {entry.transcriptError}
                       </p>
                     )}
-                    {entry.transcript !== undefined && entry.transcript !== null && (
+                    {entry.transcript && (
                       <div className="mt-3 rounded-lg bg-muted/40 p-3">
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
