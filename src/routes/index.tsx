@@ -4,11 +4,11 @@ import { VoiceJournal } from "@/components/VoiceJournal";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Voice Journal — Private, on-device recordings" },
+      { title: "Voice Journal — Private on-device recordings" },
       {
         name: "description",
         content:
-          "Record and replay voice journal entries stored entirely on your device. No accounts, no cloud.",
+          "A private voice journal. Record, replay, transcribe and edit — everything stays on your device.",
       },
       { property: "og:title", content: "Voice Journal" },
       {
