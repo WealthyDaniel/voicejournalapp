@@ -60,6 +60,8 @@ function JournalApp({ onLock }: { onLock: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [expandedTranscript, setExpandedTranscript] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTranscript, setDraftTranscript] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
