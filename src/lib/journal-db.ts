@@ -1,4 +1,4 @@
-// Simple IndexedDB wrapper for storing voice journal recordings locally.
+// IndexedDB storage for voice journal entries + settings.
 export interface JournalEntry {
   id: string;
   title: string;
@@ -6,11 +6,15 @@ export interface JournalEntry {
   durationMs: number;
   mimeType: string;
   blob: Blob;
+  transcript?: string;
+  transcriptStatus?: "none" | "pending" | "done" | "error";
+  transcriptError?: string;
 }
 
 const DB_NAME = "voice-journal";
 const STORE = "entries";
-const VERSION = 1;
+const SETTINGS = "settings";
+const VERSION = 2;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -20,6 +24,9 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE)) {
         const store = db.createObjectStore(STORE, { keyPath: "id" });
         store.createIndex("createdAt", "createdAt");
+      }
+      if (!db.objectStoreNames.contains(SETTINGS)) {
+        db.createObjectStore(SETTINGS, { keyPath: "key" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -62,7 +69,10 @@ export async function deleteEntry(id: string): Promise<void> {
   });
 }
 
-export async function renameEntry(id: string, title: string): Promise<void> {
+export async function updateEntry(
+  id: string,
+  patch: Partial<JournalEntry>,
+): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
@@ -74,9 +84,39 @@ export async function renameEntry(id: string, title: string): Promise<void> {
         resolve();
         return;
       }
-      entry.title = title;
+      Object.assign(entry, patch);
       store.put(entry);
     };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getSetting<T>(key: string): Promise<T | undefined> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SETTINGS, "readonly");
+    const req = tx.objectStore(SETTINGS).get(key);
+    req.onsuccess = () => resolve(req.result?.value as T | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function setSetting<T>(key: string, value: T): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SETTINGS, "readwrite");
+    tx.objectStore(SETTINGS).put({ key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SETTINGS, "readwrite");
+    tx.objectStore(SETTINGS).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
