@@ -36,7 +36,7 @@ function fromB64url(s: string): Uint8Array {
 
 async function derive(
   passcode: string,
-  salt: Uint8Array,
+  salt: ArrayBuffer,
   iterations: number,
 ): Promise<ArrayBuffer> {
   const key = await crypto.subtle.importKey(
@@ -51,6 +51,20 @@ async function derive(
     key,
     256,
   );
+}
+
+function randomBuffer(size: number): ArrayBuffer {
+  const buf = new ArrayBuffer(size);
+  crypto.getRandomValues(new Uint8Array(buf));
+  return buf;
+}
+
+function b64ToBuffer(s: string): ArrayBuffer {
+  const bin = atob(s);
+  const buf = new ArrayBuffer(bin.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  return buf;
 }
 
 export async function hasPasscode(): Promise<boolean> {
