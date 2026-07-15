@@ -1,5 +1,4 @@
 // Local-only lock: passcode hashed with PBKDF2, optional WebAuthn "biometric".
-// Nothing leaves the device.
 import { deleteSetting, getSetting, setSetting } from "./journal-db";
 
 const PASSCODE_KEY = "lock.passcode";
@@ -16,22 +15,31 @@ interface BiometricRecord {
   credentialId: string; // base64url
 }
 
-function b64(buf: ArrayBuffer): string {
+function bufferToB64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let s = "";
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return btoa(s);
 }
-function b64url(buf: ArrayBuffer): string {
-  return b64(buf).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function bufferToB64Url(buf: ArrayBuffer): string {
+  return bufferToB64(buf).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-function fromB64url(s: string): Uint8Array {
+function b64ToBuffer(s: string): ArrayBuffer {
+  const bin = atob(s);
+  const buf = new ArrayBuffer(bin.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  return buf;
+}
+function b64UrlToBuffer(s: string): ArrayBuffer {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
-  const bin = atob(s);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+  return b64ToBuffer(s);
+}
+function randomBuffer(size: number): ArrayBuffer {
+  const buf = new ArrayBuffer(size);
+  crypto.getRandomValues(new Uint8Array(buf));
+  return buf;
 }
 
 async function derive(
@@ -53,20 +61,6 @@ async function derive(
   );
 }
 
-function randomBuffer(size: number): ArrayBuffer {
-  const buf = new ArrayBuffer(size);
-  crypto.getRandomValues(new Uint8Array(buf));
-  return buf;
-}
-
-function b64ToBuffer(s: string): ArrayBuffer {
-  const bin = atob(s);
-  const buf = new ArrayBuffer(bin.length);
-  const view = new Uint8Array(buf);
-  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
-  return buf;
-}
-
 export async function hasPasscode(): Promise<boolean> {
   const rec = await getSetting<PasscodeRecord>(PASSCODE_KEY);
   return !!rec;
@@ -74,30 +68,26 @@ export async function hasPasscode(): Promise<boolean> {
 
 export async function setPasscode(passcode: string): Promise<void> {
   if (passcode.length < 4) throw new Error("Passcode must be at least 4 characters.");
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const salt = randomBuffer(16);
   const iterations = 200_000;
   const hash = await derive(passcode, salt, iterations);
-  const record: PasscodeRecord = {
-    saltB64: b64(salt.buffer),
-    hashB64: b64(hash),
+  await setSetting<PasscodeRecord>(PASSCODE_KEY, {
+    saltB64: bufferToB64(salt),
+    hashB64: bufferToB64(hash),
     iterations,
-  };
-  await setSetting(PASSCODE_KEY, record);
+  });
 }
 
 export async function verifyPasscode(passcode: string): Promise<boolean> {
   const rec = await getSetting<PasscodeRecord>(PASSCODE_KEY);
   if (!rec) return false;
-  const salt = new Uint8Array(fromB64url(rec.saltB64.replace(/\+/g, "-").replace(/\//g, "_")));
-  // salt was b64 (not url); decode properly
-  const rawSalt = Uint8Array.from(atob(rec.saltB64), (c) => c.charCodeAt(0));
-  const hash = await derive(passcode, rawSalt, rec.iterations);
+  const salt = b64ToBuffer(rec.saltB64);
+  const hash = await derive(passcode, salt, rec.iterations);
   const a = new Uint8Array(hash);
-  const b = Uint8Array.from(atob(rec.hashB64), (c) => c.charCodeAt(0));
+  const b = new Uint8Array(b64ToBuffer(rec.hashB64));
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-  void salt;
   return diff === 0;
 }
 
@@ -121,8 +111,8 @@ export async function isBiometricEnrolled(): Promise<boolean> {
 
 export async function enrollBiometric(): Promise<void> {
   if (!isBiometricSupported()) throw new Error("Biometrics not supported on this device.");
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const userId = crypto.getRandomValues(new Uint8Array(16));
+  const challenge = new Uint8Array(randomBuffer(32));
+  const userId = new Uint8Array(randomBuffer(16));
   const cred = (await navigator.credentials.create({
     publicKey: {
       challenge,
@@ -146,21 +136,21 @@ export async function enrollBiometric(): Promise<void> {
   })) as PublicKeyCredential | null;
   if (!cred) throw new Error("Biometric enrollment cancelled.");
   await setSetting<BiometricRecord>(BIOMETRIC_KEY, {
-    credentialId: b64url(cred.rawId),
+    credentialId: bufferToB64Url(cred.rawId),
   });
 }
 
 export async function unlockWithBiometric(): Promise<boolean> {
   const rec = await getSetting<BiometricRecord>(BIOMETRIC_KEY);
   if (!rec) return false;
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const challenge = new Uint8Array(randomBuffer(32));
   try {
     const assertion = (await navigator.credentials.get({
       publicKey: {
         challenge,
         allowCredentials: [
           {
-            id: fromB64url(rec.credentialId),
+            id: new Uint8Array(b64UrlToBuffer(rec.credentialId)),
             type: "public-key",
           },
         ],
