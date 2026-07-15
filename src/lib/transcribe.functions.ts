@@ -17,11 +17,12 @@ const MIME_EXT: Record<string, string> = {
   "audio/wave": "wav",
 };
 
-function base64ToUint8Array(b64: string): Uint8Array {
+function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+  const buf = new ArrayBuffer(bin.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  return buf;
 }
 
 export const transcribeAudio = createServerFn({ method: "POST" })
