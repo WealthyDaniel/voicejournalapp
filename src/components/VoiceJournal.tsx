@@ -60,6 +60,8 @@ function JournalApp({ onLock }: { onLock: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [expandedTranscript, setExpandedTranscript] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTranscript, setDraftTranscript] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -314,12 +316,16 @@ function JournalApp({ onLock }: { onLock: () => void }) {
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <MicIcon />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Voice Journal"
+              className="h-12 w-12 rounded-xl object-contain"
+            />
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Voice Journal</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="font-serif text-3xl font-medium tracking-tight">
+                Voice Journal
+              </h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
                 Private, on-device. Optional AI transcription.
               </p>
             </div>
@@ -497,31 +503,86 @@ function JournalApp({ onLock }: { onLock: () => void }) {
                     )}
                     {entry.transcript && (
                       <div className="mt-3 rounded-lg bg-muted/40 p-3">
-                        <div className="mb-1 flex items-center justify-between">
+                        <div className="mb-1 flex items-center justify-between gap-2">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Transcript
                           </span>
-                          <button
-                            onClick={() => {
-                              setExpandedTranscript((s) => {
-                                const next = new Set(s);
-                                if (next.has(entry.id)) next.delete(entry.id);
-                                else next.add(entry.id);
-                                return next;
-                              });
-                            }}
-                            className="text-[11px] text-muted-foreground hover:text-foreground"
-                          >
-                            {showT ? "Collapse" : "Expand"}
-                          </button>
+                          <div className="flex items-center gap-3">
+                            {editingId !== entry.id && (
+                              <button
+                                onClick={() => {
+                                  setEditingId(entry.id);
+                                  setDraftTranscript(entry.transcript ?? "");
+                                  setExpandedTranscript((s) => new Set(s).add(entry.id));
+                                }}
+                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            {editingId !== entry.id && (
+                              <button
+                                onClick={() => {
+                                  setExpandedTranscript((s) => {
+                                    const next = new Set(s);
+                                    if (next.has(entry.id)) next.delete(entry.id);
+                                    else next.add(entry.id);
+                                    return next;
+                                  });
+                                }}
+                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                              >
+                                {showT ? "Collapse" : "Expand"}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <p
-                          className={`whitespace-pre-wrap text-sm leading-relaxed text-foreground/90 ${
-                            showT ? "" : "line-clamp-3"
-                          }`}
-                        >
-                          {highlight(entry.transcript, query)}
-                        </p>
+                        {editingId === entry.id ? (
+                          <div>
+                            <textarea
+                              value={draftTranscript}
+                              onChange={(e) => setDraftTranscript(e.target.value)}
+                              rows={Math.min(20, Math.max(6, draftTranscript.split("\n").length + 2))}
+                              className="w-full resize-y rounded-md border border-border bg-background p-2 font-serif text-sm leading-relaxed outline-none focus:border-ring"
+                              placeholder="Edit your transcript…"
+                            />
+                            <div className="mt-2 flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingId(null);
+                                  setDraftTranscript("");
+                                }}
+                                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const text = draftTranscript.trim();
+                                  await updateEntry(entry.id, {
+                                    transcript: text,
+                                    transcriptStatus: text ? "done" : "none",
+                                    transcriptError: undefined,
+                                  });
+                                  setEditingId(null);
+                                  setDraftTranscript("");
+                                  await refresh();
+                                }}
+                                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p
+                            className={`whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/90 ${
+                              showT ? "" : "line-clamp-3"
+                            }`}
+                          >
+                            {highlight(entry.transcript ?? "", query)}
+                          </p>
+                        )}
                       </div>
                     )}
                   </li>
