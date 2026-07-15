@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   addEntry,
   deleteEntry,
   formatDate,
   formatDuration,
-  hasPasscode as _hasPasscode,
   listEntries,
   updateEntry,
   type JournalEntry,
@@ -16,8 +15,6 @@ import { AudioPlayer } from "./AudioPlayer";
 import { LockScreen, LockSettingsButton } from "./LockScreen";
 
 type RecState = "idle" | "recording" | "paused";
-
-void _hasPasscode;
 
 export function VoiceJournal() {
   const [checkingLock, setCheckingLock] = useState(true);
@@ -546,7 +543,7 @@ function JournalApp({ onLock }: { onLock: () => void }) {
 function highlight(text: string, query: string) {
   const q = query.trim();
   if (!q) return text;
-  const parts: (string | JSX.Element)[] = [];
+  const parts: ReactNode[] = [];
   const re = new RegExp(`(${escapeRegExp(q)})`, "ig");
   let last = 0;
   let m: RegExpExecArray | null;
