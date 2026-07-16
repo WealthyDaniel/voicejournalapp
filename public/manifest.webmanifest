@@ -6,8 +6,9 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f2ec",
-  "theme_color": "#2b3a55",
+  "background_color": "#f5efe4",
+  "theme_color": "#5c7a6d",
+  "categories": ["lifestyle", "productivity", "health"],
   "icons": [
     { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
