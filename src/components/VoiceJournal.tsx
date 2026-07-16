@@ -13,6 +13,7 @@ import { hasPasscode } from "@/lib/lock";
 import { transcribeAudio } from "@/lib/transcribe.functions";
 import { AudioPlayer } from "./AudioPlayer";
 import { LockScreen, LockSettingsButton } from "./LockScreen";
+import { InstallPrompt } from "./InstallPrompt";
 
 type RecState = "idle" | "recording" | "paused";
 
@@ -44,11 +45,14 @@ export function VoiceJournal() {
     );
   }
   return (
-    <JournalApp
-      onLock={() => {
-        setLocked(true);
-      }}
-    />
+    <>
+      <JournalApp
+        onLock={() => {
+          setLocked(true);
+        }}
+      />
+      <InstallPrompt />
+    </>
   );
 }
 
