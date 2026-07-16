@@ -146,11 +146,24 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
+    background-image:
+      radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.94 0.04 165 / 0.55), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 90% 20%, oklch(0.93 0.035 85 / 0.55), transparent 60%),
+      radial-gradient(ellipse 90% 60% at 50% 100%, oklch(0.94 0.03 260 / 0.35), transparent 65%);
+    background-attachment: fixed;
+    min-height: 100vh;
   }
 
   h1, h2, h3 {
     font-family: var(--font-serif);
     font-feature-settings: "ss01";
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    font-weight: 500;
   }
 }
+
+@keyframes soothe-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
