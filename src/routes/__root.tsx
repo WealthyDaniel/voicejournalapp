@@ -89,7 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "Record and replay voice journal entries stored entirely on your device. No accounts, no cloud." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9b90d595-b3a3-4a07-87cf-c0dab443c9ab/id-preview-52047319--6f433c5c-57d0-420b-8a93-582dda0cb80e.lovable.app-1784144841215.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9b90d595-b3a3-4a07-87cf-c0dab443c9ab/id-preview-52047319--6f433c5c-57d0-420b-8a93-582dda0cb80e.lovable.app-1784144841215.png" },
-      { name: "theme-color", content: "#5c7a6d" },
+      { name: "theme-color", content: "#0b1226" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "Journal" },
