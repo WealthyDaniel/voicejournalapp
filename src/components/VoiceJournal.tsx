@@ -14,6 +14,7 @@ import { transcribeAudio } from "@/lib/transcribe.functions";
 import { AudioPlayer } from "./AudioPlayer";
 import { LockScreen, LockSettingsButton } from "./LockScreen";
 import { InstallPrompt } from "./InstallPrompt";
+import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
 
 type RecState = "idle" | "recording" | "paused";
 
@@ -52,6 +53,7 @@ export function VoiceJournal() {
         }}
       />
       <InstallPrompt />
+      <PWAUpdatePrompt />
     </>
   );
 }
@@ -338,20 +340,29 @@ function JournalApp({ onLock }: { onLock: () => void }) {
         </header>
 
         {/* Recorder */}
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-col items-center">
-            <div className="relative flex h-40 w-40 items-center justify-center">
+        <section className="relative overflow-hidden rounded-3xl border border-border bg-card/70 p-6 shadow-2xl backdrop-blur-md">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-70"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 50% at 50% 20%, oklch(0.55 0.22 245 / 0.35), transparent 70%), radial-gradient(ellipse 90% 40% at 50% 100%, oklch(0.45 0.2 220 / 0.35), transparent 65%)",
+            }}
+          />
+          <div className="relative flex flex-col items-center">
+            <div className="relative flex h-44 w-44 items-center justify-center">
               <div
-                className="absolute inset-0 rounded-full bg-primary/10 transition-transform"
-                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.6 : 0)})` }}
+                className="absolute inset-0 rounded-full bg-primary/10 transition-transform duration-150"
+                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.7 : 0)})` }}
               />
               <div
-                className="absolute inset-4 rounded-full bg-primary/15 transition-transform"
-                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.35 : 0)})` }}
+                className="absolute inset-6 rounded-full bg-primary/20 transition-transform duration-150"
+                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.45 : 0)})` }}
               />
               <button
                 onClick={() => (recState === "idle" ? void startRecording() : stopRecording())}
-                className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+                className="glow-ring relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary/70 text-primary-foreground transition-transform hover:scale-105 active:scale-95"
+                style={recState === "recording" ? { animation: "neon-pulse 1.6s ease-in-out infinite" } : undefined}
                 aria-label={recState === "idle" ? "Start recording" : "Stop recording"}
               >
                 {recState === "idle" ? (
