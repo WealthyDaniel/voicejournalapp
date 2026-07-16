@@ -45,11 +45,14 @@ export function VoiceJournal() {
     );
   }
   return (
-    <JournalApp
-      onLock={() => {
-        setLocked(true);
-      }}
-    />
+    <>
+      <JournalApp
+        onLock={() => {
+          setLocked(true);
+        }}
+      />
+      <InstallPrompt />
+    </>
   );
 }
 
