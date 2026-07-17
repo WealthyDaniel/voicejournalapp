@@ -4,6 +4,7 @@ import { z } from "zod";
 const Input = z.object({
   audioBase64: z.string().min(1),
   mimeType: z.string().min(1),
+  language: z.string().max(8).optional(),
 });
 
 const MIME_EXT: Record<string, string> = {
@@ -46,6 +47,9 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     const form = new FormData();
     form.append("model", "openai/gpt-4o-transcribe");
     form.append("file", blob, `recording.${ext}`);
+    // Bare ISO-639-1 only; omit for auto-detect.
+    const lang = (data.language ?? "").trim().slice(0, 2).toLowerCase();
+    if (lang) form.append("language", lang);
 
     const res = await fetch(
       "https://ai.gateway.lovable.dev/v1/audio/transcriptions",
