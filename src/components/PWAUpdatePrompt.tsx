@@ -1,16 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { registerPwa } from "@/lib/pwa-register";
+import { getSettings, onSettingsChange } from "@/lib/pwa-settings";
 
 export function PWAUpdatePrompt() {
   const [visible, setVisible] = useState(false);
   const [reload, setReload] = useState<null | (() => Promise<void> | void)>(null);
   const [applying, setApplying] = useState(false);
+  const modeRef = useRef(getSettings().updateMode);
 
   useEffect(() => {
+    const off = onSettingsChange((s) => {
+      modeRef.current = s.updateMode;
+    });
     void registerPwa((doReload) => {
+      const mode = modeRef.current;
+      if (mode === "off") return;
+      if (mode === "auto") {
+        void doReload();
+        return;
+      }
       setReload(() => doReload);
       setVisible(true);
     });
+    return off;
   }, []);
 
   if (!visible) return null;
