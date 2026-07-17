@@ -329,21 +329,15 @@ function JournalApp({ onLock }: { onLock: () => void }) {
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img
-              src="/logo.png"
-              alt="Voice Journal"
-              className="h-12 w-12 rounded-xl object-contain"
-            />
-            <div>
-              <h1 className="font-serif text-3xl font-medium tracking-tight">
-                Voice Journal
-              </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Private, on-device. Optional AI transcription.
-              </p>
-            </div>
+          <div>
+            <h1 className="font-serif text-3xl font-medium tracking-tight">
+              Voice Journal
+            </h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Private, on-device. Optional AI transcription.
+            </p>
           </div>
+
           <div className="flex items-center gap-1.5">
             <PWASettingsButton />
             <LockSettingsButton onLock={onLock} />
