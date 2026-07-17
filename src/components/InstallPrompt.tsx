@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { getSettings } from "@/lib/pwa-settings";
+
 
 type BIPEvent = Event & {
   prompt: () => Promise<void>;
@@ -29,6 +31,7 @@ export function InstallPrompt() {
 
   useEffect(() => {
     if (isStandalone()) return;
+    if (!getSettings().showInstallPrompt) return;
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
     if (dismissedAt && Date.now() - dismissedAt < DISMISS_MS) return;
 
