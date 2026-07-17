@@ -15,6 +15,9 @@ import { AudioPlayer } from "./AudioPlayer";
 import { LockScreen, LockSettingsButton } from "./LockScreen";
 import { InstallPrompt } from "./InstallPrompt";
 import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
+import { PWASettingsButton } from "./PWASettings";
+import { getSettings } from "@/lib/pwa-settings";
+
 
 type RecState = "idle" | "recording" | "paused";
 
@@ -278,8 +281,13 @@ function JournalApp({ onLock }: { onLock: () => void }) {
       await updateEntry(entry.id, { transcriptStatus: "pending", transcriptError: undefined });
       await refresh();
       const base64 = await blobToBase64(entry.blob);
+      const language = getSettings().transcriptionLanguage || undefined;
       const { text } = await transcribeFn({
-        data: { audioBase64: base64, mimeType: entry.mimeType || entry.blob.type || "audio/webm" },
+        data: {
+          audioBase64: base64,
+          mimeType: entry.mimeType || entry.blob.type || "audio/webm",
+          language,
+        },
       });
       await updateEntry(entry.id, {
         transcript: text,
@@ -336,7 +344,11 @@ function JournalApp({ onLock }: { onLock: () => void }) {
               </p>
             </div>
           </div>
-          <LockSettingsButton onLock={onLock} />
+          <div className="flex items-center gap-1.5">
+            <PWASettingsButton />
+            <LockSettingsButton onLock={onLock} />
+          </div>
+
         </header>
 
         {/* Recorder */}
