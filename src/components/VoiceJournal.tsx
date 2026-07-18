@@ -16,6 +16,7 @@ import { LockScreen, LockSettingsButton } from "./LockScreen";
 import { InstallPrompt } from "./InstallPrompt";
 import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
 import { PWASettingsButton } from "./PWASettings";
+import { SplashScreen } from "./SplashScreen";
 import { getSettings } from "@/lib/pwa-settings";
 
 
@@ -25,6 +26,12 @@ export function VoiceJournal() {
   const [checkingLock, setCheckingLock] = useState(true);
   const [locked, setLocked] = useState(false);
   const [lockConfigured, setLockConfigured] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setShowSplash(false), 1650);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -36,20 +43,29 @@ export function VoiceJournal() {
   }, []);
 
   if (checkingLock) {
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <>
+        {showSplash && <SplashScreen />}
+        <div className="min-h-screen bg-background" />
+      </>
+    );
   }
   if (locked || !lockConfigured) {
     return (
-      <LockScreen
-        onUnlocked={async () => {
-          setLocked(false);
-          setLockConfigured(await hasPasscode());
-        }}
-      />
+      <>
+        {showSplash && <SplashScreen />}
+        <LockScreen
+          onUnlocked={async () => {
+            setLocked(false);
+            setLockConfigured(await hasPasscode());
+          }}
+        />
+      </>
     );
   }
   return (
     <>
+      {showSplash && <SplashScreen />}
       <JournalApp
         onLock={() => {
           setLocked(true);
@@ -613,9 +629,48 @@ function JournalApp({ onLock }: { onLock: () => void }) {
           )}
         </section>
 
-        <footer className="mt-10 text-center text-xs text-muted-foreground">
-          Recordings live on this device only. Transcription sends audio to Lovable AI
-          when you tap the transcribe button.
+        {/* Privacy policy */}
+        <section
+          aria-labelledby="privacy-heading"
+          className="mt-10 rounded-2xl border border-border bg-card/60 p-5 backdrop-blur"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4z" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <h2 id="privacy-heading" className="font-serif text-lg font-medium">
+              Your privacy
+            </h2>
+          </div>
+          <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
+            <p>
+              Your recordings are safe. Every voice note you make is saved{" "}
+              <span className="text-foreground">only on this device</span> — just like the
+              built-in recorder on your phone.
+            </p>
+            <p>
+              There is <span className="text-foreground">no account, no cloud, and no database</span>.
+              We don't upload, back up, or read your journals. They live with you, and only you.
+            </p>
+            <p>
+              The one exception: if you tap the transcribe button, that single recording is
+              sent to Lovable AI to be turned into text, then the text is stored back on your
+              device. You choose when — nothing leaves your phone unless you ask for it.
+            </p>
+            <p className="text-xs">
+              Clearing your browser data or uninstalling the app will erase your recordings,
+              because they live nowhere else.
+            </p>
+          </div>
+        </section>
+
+        <footer className="mt-6 text-center text-xs text-muted-foreground">
+          Voice Journal · Private, on-device
         </footer>
       </div>
     </div>
