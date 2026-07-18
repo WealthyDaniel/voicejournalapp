@@ -450,6 +450,8 @@ function JournalApp({ onLock }: { onLock: () => void }) {
               className="hidden"
               onChange={(e) => void handleUpload(e.target.files)}
             />
+
+            <LanguageSelector />
           </div>
 
           {error && (
