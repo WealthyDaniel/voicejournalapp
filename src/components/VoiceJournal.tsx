@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import {
   addEntry,
   deleteEntry,
@@ -17,7 +18,8 @@ import { InstallPrompt } from "./InstallPrompt";
 import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
 import { PWASettingsButton } from "./PWASettings";
 import { SplashScreen } from "./SplashScreen";
-import { getSettings } from "@/lib/pwa-settings";
+import { getSettings, setSettings, onSettingsChange, LANGUAGES } from "@/lib/pwa-settings";
+import { chunkAudioToWav, blobToBase64 } from "@/lib/audio-chunker";
 
 
 type RecState = "idle" | "recording" | "paused";
