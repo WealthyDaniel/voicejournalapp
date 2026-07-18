@@ -281,34 +281,37 @@ function JournalApp({ onLock }: { onLock: () => void }) {
     await refresh();
   }
 
-  async function blobToBase64(blob: Blob): Promise<string> {
-    const buf = await blob.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let bin = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    return btoa(bin);
-  }
-
   async function transcribe(entry: JournalEntry) {
     setTranscribingId(entry.id);
     setError(null);
     try {
       await updateEntry(entry.id, { transcriptStatus: "pending", transcriptError: undefined });
       await refresh();
-      const base64 = await blobToBase64(entry.blob);
       const language = getSettings().transcriptionLanguage || undefined;
-      const { text } = await transcribeFn({
-        data: {
-          audioBase64: base64,
-          mimeType: entry.mimeType || entry.blob.type || "audio/webm",
-          language,
-        },
-      });
+
+      // Split long recordings into ~5-minute WAV chunks so nothing gets cut off.
+      const chunks = await chunkAudioToWav(entry.blob, 300);
+      const parts: string[] = [];
+      for (const c of chunks) {
+        const base64 = await blobToBase64(c.blob);
+        const { text } = await transcribeFn({
+          data: {
+            audioBase64: base64,
+            mimeType: "audio/wav",
+            language,
+          },
+        });
+        parts.push(text);
+        // Save partial progress so users see it accumulating on long notes.
+        await updateEntry(entry.id, {
+          transcript: parts.join(" ").trim(),
+          transcriptStatus: "pending",
+        });
+        await refresh();
+      }
+
       await updateEntry(entry.id, {
-        transcript: text,
+        transcript: parts.join(" ").trim(),
         transcriptStatus: "done",
         transcriptError: undefined,
       });
