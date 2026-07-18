@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import {
   addEntry,
   deleteEntry,
@@ -17,7 +18,8 @@ import { InstallPrompt } from "./InstallPrompt";
 import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
 import { PWASettingsButton } from "./PWASettings";
 import { SplashScreen } from "./SplashScreen";
-import { getSettings } from "@/lib/pwa-settings";
+import { getSettings, setSettings, onSettingsChange, LANGUAGES } from "@/lib/pwa-settings";
+import { chunkAudioToWav, blobToBase64 } from "@/lib/audio-chunker";
 
 
 type RecState = "idle" | "recording" | "paused";
@@ -279,34 +281,37 @@ function JournalApp({ onLock }: { onLock: () => void }) {
     await refresh();
   }
 
-  async function blobToBase64(blob: Blob): Promise<string> {
-    const buf = await blob.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let bin = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    return btoa(bin);
-  }
-
   async function transcribe(entry: JournalEntry) {
     setTranscribingId(entry.id);
     setError(null);
     try {
       await updateEntry(entry.id, { transcriptStatus: "pending", transcriptError: undefined });
       await refresh();
-      const base64 = await blobToBase64(entry.blob);
       const language = getSettings().transcriptionLanguage || undefined;
-      const { text } = await transcribeFn({
-        data: {
-          audioBase64: base64,
-          mimeType: entry.mimeType || entry.blob.type || "audio/webm",
-          language,
-        },
-      });
+
+      // Split long recordings into ~5-minute WAV chunks so nothing gets cut off.
+      const chunks = await chunkAudioToWav(entry.blob, 300);
+      const parts: string[] = [];
+      for (const c of chunks) {
+        const base64 = await blobToBase64(c.blob);
+        const { text } = await transcribeFn({
+          data: {
+            audioBase64: base64,
+            mimeType: "audio/wav",
+            language,
+          },
+        });
+        parts.push(text);
+        // Save partial progress so users see it accumulating on long notes.
+        await updateEntry(entry.id, {
+          transcript: parts.join(" ").trim(),
+          transcriptStatus: "pending",
+        });
+        await refresh();
+      }
+
       await updateEntry(entry.id, {
-        transcript: text,
+        transcript: parts.join(" ").trim(),
         transcriptStatus: "done",
         transcriptError: undefined,
       });
@@ -445,6 +450,8 @@ function JournalApp({ onLock }: { onLock: () => void }) {
               className="hidden"
               onChange={(e) => void handleUpload(e.target.files)}
             />
+
+            <LanguageSelector />
           </div>
 
           {error && (
@@ -629,50 +636,75 @@ function JournalApp({ onLock }: { onLock: () => void }) {
           )}
         </section>
 
-        {/* Privacy policy */}
-        <section
-          aria-labelledby="privacy-heading"
-          className="mt-10 rounded-2xl border border-border bg-card/60 p-5 backdrop-blur"
-        >
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4z" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <h2 id="privacy-heading" className="font-serif text-lg font-medium">
-              Your privacy
-            </h2>
-          </div>
-          <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
-            <p>
-              Your recordings are safe. Every voice note you make is saved{" "}
-              <span className="text-foreground">only on this device</span> — just like the
-              built-in recorder on your phone.
-            </p>
-            <p>
-              There is <span className="text-foreground">no account, no cloud, and no database</span>.
-              We don't upload, back up, or read your journals. They live with you, and only you.
-            </p>
-            <p>
-              The one exception: if you tap the transcribe button, that single recording is
-              sent to Lovable AI to be turned into text, then the text is stored back on your
-              device. You choose when — nothing leaves your phone unless you ask for it.
-            </p>
-            <p className="text-xs">
-              Clearing your browser data or uninstalling the app will erase your recordings,
-              because they live nowhere else.
-            </p>
-          </div>
-        </section>
-
-        <footer className="mt-6 text-center text-xs text-muted-foreground">
-          Voice Journal · Private, on-device
+        <footer className="mt-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
+          <Link
+            to="/privacy"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Privacy Policy
+          </Link>
+          <span>Voice Journal · Private, on-device</span>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function LanguageSelector() {
+  const [lang, setLang] = useState<string>(() => getSettings().transcriptionLanguage);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => onSettingsChange((s) => setLang(s.transcriptionLanguage)), []);
+
+  const current = LANGUAGES.find((l) => l.code === lang) ?? LANGUAGES[0];
+  const isAuto = !lang;
+
+  return (
+    <div className="mt-4 w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Change transcription language"
+        className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs backdrop-blur hover:bg-accent"
+      >
+        <span className="flex items-center gap-2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-muted-foreground">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" strokeLinecap="round" />
+          </svg>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Transcription
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isAuto ? "bg-primary/15 text-primary" : "bg-accent text-foreground"
+            }`}
+          >
+            {isAuto ? "Auto-detect" : current.label}
+          </span>
+        </span>
+        <span className="text-[11px] text-muted-foreground group-hover:text-foreground">
+          {open ? "Close" : "Change"}
+        </span>
+      </button>
+      {open && (
+        <select
+          autoFocus
+          value={lang}
+          onChange={(e) => {
+            setSettings({ transcriptionLanguage: e.target.value });
+            setOpen(false);
+          }}
+          className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code || "auto"} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
