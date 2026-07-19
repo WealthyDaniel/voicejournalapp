@@ -1,26 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   addEntry,
-  deleteEntry,
-  formatDate,
   formatDuration,
   listEntries,
-  updateEntry,
   type JournalEntry,
 } from "@/lib/journal-db";
 import { hasPasscode } from "@/lib/lock";
-import { transcribeAudio } from "@/lib/transcribe.functions";
-import { AudioPlayer } from "./AudioPlayer";
 import { LockScreen, LockSettingsButton } from "./LockScreen";
 import { InstallPrompt } from "./InstallPrompt";
 import { PWAUpdatePrompt } from "./PWAUpdatePrompt";
-import { PWASettingsButton } from "./PWASettings";
+import { PWASettingsModal } from "./PWASettings";
 import { SplashScreen } from "./SplashScreen";
-import { getSettings, setSettings, onSettingsChange, LANGUAGES } from "@/lib/pwa-settings";
-import { chunkAudioToWav, blobToBase64 } from "@/lib/audio-chunker";
-
+import { EntryList } from "./EntryList";
+import { BottomTabs } from "./BottomTabs";
 
 type RecState = "idle" | "recording" | "paused";
 
@@ -68,7 +61,7 @@ export function VoiceJournal() {
   return (
     <>
       {showSplash && <SplashScreen />}
-      <JournalApp
+      <RecorderScreen
         onLock={() => {
           setLocked(true);
         }}
@@ -79,18 +72,15 @@ export function VoiceJournal() {
   );
 }
 
-function JournalApp({ onLock }: { onLock: () => void }) {
+function RecorderScreen({ onLock }: { onLock: () => void }) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [recState, setRecState] = useState<RecState>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [level, setLevel] = useState(0);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [transcribingId, setTranscribingId] = useState<string | null>(null);
-  const [expandedTranscript, setExpandedTranscript] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draftTranscript, setDraftTranscript] = useState("");
-  const [query, setQuery] = useState("");
+  const [levels, setLevels] = useState<number[]>(() => new Array(24).fill(0.05));
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -100,9 +90,6 @@ function JournalApp({ onLock }: { onLock: () => void }) {
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const transcribeFn = useServerFn(transcribeAudio);
 
   useEffect(() => {
     void refresh();
@@ -140,7 +127,13 @@ function JournalApp({ onLock }: { onLock: () => void }) {
         const v = (arr[i] - 128) / 128;
         sum += v * v;
       }
-      setLevel(Math.min(1, Math.sqrt(sum / arr.length) * 2.5));
+      const l = Math.min(1, Math.sqrt(sum / arr.length) * 2.5);
+      setLevel(l);
+      setLevels((prev) => {
+        const next = prev.slice(1);
+        next.push(Math.max(0.05, l));
+        return next;
+      });
     }
     rafRef.current = requestAnimationFrame(tick);
   }
@@ -181,6 +174,7 @@ function JournalApp({ onLock }: { onLock: () => void }) {
         setElapsedMs(0);
         accumMsRef.current = 0;
         setLevel(0);
+        setLevels(new Array(24).fill(0.05));
         if (blob.size > 0) await saveBlob(blob, durationMs, type);
       };
       mediaRecorderRef.current = rec;
@@ -195,20 +189,6 @@ function JournalApp({ onLock }: { onLock: () => void }) {
     }
   }
 
-  function pauseRecording() {
-    const rec = mediaRecorderRef.current;
-    if (!rec || rec.state !== "recording") return;
-    rec.pause();
-    accumMsRef.current += performance.now() - startTimeRef.current;
-    setRecState("paused");
-  }
-  function resumeRecording() {
-    const rec = mediaRecorderRef.current;
-    if (!rec || rec.state !== "paused") return;
-    startTimeRef.current = performance.now();
-    rec.resume();
-    setRecState("recording");
-  }
   function stopRecording() {
     const rec = mediaRecorderRef.current;
     if (!rec) return;
@@ -267,180 +247,99 @@ function JournalApp({ onLock }: { onLock: () => void }) {
     });
   }
 
-  async function onDelete(id: string) {
-    if (!confirm("Delete this recording? This cannot be undone.")) return;
-    if (openId === id) setOpenId(null);
-    await deleteEntry(id);
-    await refresh();
-  }
-
-  async function onRename(entry: JournalEntry) {
-    const name = prompt("Rename recording", entry.title);
-    if (!name || name.trim() === "" || name === entry.title) return;
-    await updateEntry(entry.id, { title: name.trim() });
-    await refresh();
-  }
-
-  async function transcribe(entry: JournalEntry) {
-    setTranscribingId(entry.id);
-    setError(null);
-    try {
-      await updateEntry(entry.id, { transcriptStatus: "pending", transcriptError: undefined });
-      await refresh();
-      const language = getSettings().transcriptionLanguage || undefined;
-
-      // Split long recordings into ~5-minute WAV chunks so nothing gets cut off.
-      const chunks = await chunkAudioToWav(entry.blob, 300);
-      const parts: string[] = [];
-      for (const c of chunks) {
-        const base64 = await blobToBase64(c.blob);
-        const { text } = await transcribeFn({
-          data: {
-            audioBase64: base64,
-            mimeType: "audio/wav",
-            language,
-          },
-        });
-        parts.push(text);
-        // Save partial progress so users see it accumulating on long notes.
-        await updateEntry(entry.id, {
-          transcript: parts.join(" ").trim(),
-          transcriptStatus: "pending",
-        });
-        await refresh();
-      }
-
-      await updateEntry(entry.id, {
-        transcript: parts.join(" ").trim(),
-        transcriptStatus: "done",
-        transcriptError: undefined,
-      });
-      setExpandedTranscript((s) => new Set(s).add(entry.id));
-      await refresh();
-    } catch (e) {
-      const msg = (e as Error).message || "Transcription failed.";
-      await updateEntry(entry.id, {
-        transcriptStatus: "error",
-        transcriptError: msg,
-      });
-      await refresh();
-      setError(msg);
-    } finally {
-      setTranscribingId(null);
-    }
-  }
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter((e) => {
-      return (
-        e.title.toLowerCase().includes(q) ||
-        (e.transcript ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [entries, query]);
-
-  const totalDuration = useMemo(
-    () => entries.reduce((sum, e) => sum + e.durationMs, 0),
-    [entries],
-  );
+  const recent = useMemo(() => entries.slice(0, 3), [entries]);
+  const isRecording = recState === "recording";
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-        <header className="mb-8 flex items-start justify-between gap-3">
+    <div className="min-h-screen bg-background text-foreground pb-4">
+      <div className="mx-auto max-w-md px-4 pt-6 sm:pt-10">
+        {/* Header */}
+        <header className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-3xl font-medium tracking-tight">
-              Voice Journal
-            </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Private, on-device. Optional AI transcription.
+            <h1 className="font-serif text-2xl font-medium tracking-tight">DearMe</h1>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              Your private voice journal
             </p>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <PWASettingsButton />
-            <LockSettingsButton onLock={onLock} />
-          </div>
-
+          <LockSettingsButton onLock={onLock} />
         </header>
 
-        {/* Recorder */}
-        <section className="relative overflow-hidden rounded-3xl border border-border bg-card/70 p-6 shadow-2xl backdrop-blur-md">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-70"
-            style={{
-              background:
-                "radial-gradient(ellipse 80% 50% at 50% 20%, oklch(0.55 0.22 245 / 0.35), transparent 70%), radial-gradient(ellipse 90% 40% at 50% 100%, oklch(0.45 0.2 220 / 0.35), transparent 65%)",
-            }}
-          />
-          <div className="relative flex flex-col items-center">
-            <div className="relative flex h-44 w-44 items-center justify-center">
-              <div
-                className="absolute inset-0 rounded-full bg-primary/10 transition-transform duration-150"
-                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.7 : 0)})` }}
-              />
-              <div
-                className="absolute inset-6 rounded-full bg-primary/20 transition-transform duration-150"
-                style={{ transform: `scale(${1 + (recState === "recording" ? level * 0.45 : 0)})` }}
-              />
-              <button
-                onClick={() => (recState === "idle" ? void startRecording() : stopRecording())}
-                className="glow-ring relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary/70 text-primary-foreground transition-transform hover:scale-105 active:scale-95"
-                style={recState === "recording" ? { animation: "neon-pulse 1.6s ease-in-out infinite" } : undefined}
-                aria-label={recState === "idle" ? "Start recording" : "Stop recording"}
-              >
-                {recState === "idle" ? (
-                  <MicIcon className="h-9 w-9" />
-                ) : (
-                  <span className="block h-6 w-6 rounded-sm bg-primary-foreground" />
-                )}
-              </button>
-            </div>
+        {/* Recorder card */}
+        <section className="relative overflow-hidden rounded-[28px] border border-border/70 bg-card p-6 shadow-2xl">
+          <h2 className="text-center font-serif text-2xl text-card-foreground">
+            {isRecording ? "Listening…" : "Speak your mind"}
+          </h2>
 
-            <div className="mt-4 font-mono text-3xl tabular-nums">
-              {formatDuration(elapsedMs)}
-            </div>
-            <div className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">
-              {recState === "idle" && "Tap to record"}
-              {recState === "recording" && (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-destructive" />
-                  Recording
-                </span>
+          {/* Wave visualizer */}
+          <div className="mt-4 flex h-10 items-center justify-center gap-[3px]">
+            {levels.map((v, i) => {
+              const h = Math.max(3, Math.round(v * 34));
+              return (
+                <span
+                  key={i}
+                  className="w-[3px] rounded-full bg-foreground/60"
+                  style={{ height: `${h}px`, opacity: isRecording ? 0.85 : 0.4 }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Big mic button with concentric rings */}
+          <div className="relative mx-auto mt-6 flex h-64 w-64 items-center justify-center">
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="absolute rounded-full border border-foreground/10"
+                style={{
+                  inset: `${i * 14}px`,
+                  transform: isRecording ? `scale(${1 + level * (0.08 + i * 0.02)})` : "scale(1)",
+                  transition: "transform 120ms ease-out",
+                }}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => (recState === "idle" ? void startRecording() : stopRecording())}
+              aria-label={recState === "idle" ? "Start recording" : "Stop recording"}
+              className="relative flex h-36 w-36 items-center justify-center rounded-full bg-foreground text-background shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] ring-4 ring-card transition-transform active:scale-95"
+              style={{
+                boxShadow: isRecording
+                  ? "0 20px 60px -10px rgba(0,0,0,0.6), 0 0 0 8px oklch(0.75 0.06 60 / 0.15)"
+                  : undefined,
+              }}
+            >
+              {recState === "idle" ? (
+                <MicIcon className="h-14 w-14" />
+              ) : (
+                <span className="block h-8 w-8 rounded-md bg-background" />
               )}
-              {recState === "paused" && "Paused"}
-            </div>
+            </button>
+          </div>
 
-            {recState !== "idle" && (
-              <div className="mt-4 flex gap-2">
-                {recState === "recording" ? (
-                  <button onClick={pauseRecording} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
-                    Pause
-                  </button>
-                ) : (
-                  <button onClick={resumeRecording} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
-                    Resume
-                  </button>
-                )}
-              </div>
+          <p className="mt-6 text-center text-[15px] font-medium text-card-foreground">
+            {recState === "idle" && "Tap to start recording"}
+            {isRecording && (
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-destructive" />
+                <span className="tabular-nums">{formatDuration(elapsedMs)}</span>
+              </span>
             )}
+            {recState === "paused" && "Paused"}
+          </p>
 
-            <div className="mt-6 flex w-full items-center gap-3 text-sm">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-muted-foreground">or</span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
+          <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+            <ShieldIcon />
+            Private &amp; Secure
+          </p>
 
+          <div className="mt-5 flex justify-center">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={recState !== "idle"}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              <UploadIcon />
-              Import audio file
+              <UploadIcon /> Import audio
             </button>
             <input
               ref={fileInputRef}
@@ -450,8 +349,6 @@ function JournalApp({ onLock }: { onLock: () => void }) {
               className="hidden"
               onChange={(e) => void handleUpload(e.target.files)}
             />
-
-            <LanguageSelector />
           </div>
 
           {error && (
@@ -461,370 +358,65 @@ function JournalApp({ onLock }: { onLock: () => void }) {
           )}
         </section>
 
-        {/* Library */}
-        <section className="mt-10">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <h2 className="text-lg font-semibold tracking-tight">Your recordings</h2>
-            <p className="text-xs text-muted-foreground">
-              {entries.length} {entries.length === 1 ? "entry" : "entries"} ·{" "}
-              {formatDuration(totalDuration)}
-            </p>
+        {/* Recent entries */}
+        <section className="mt-8">
+          <div className="mb-3 flex items-end justify-between">
+            <h2 className="text-[15px] font-semibold tracking-tight">Recent Entries</h2>
+            {entries.length > 3 && (
+              <Link
+                to="/history"
+                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                See all
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                  <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
+            )}
           </div>
 
-          <div className="relative mb-3">
-            <SearchIcon />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search titles and transcripts…"
-              className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-3 text-sm outline-none focus:border-ring"
-            />
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                {entries.length === 0
-                  ? "No recordings yet. Tap the mic to start your first entry."
-                  : "No entries match your search."}
-              </p>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {filtered.map((entry) => {
-                const isOpen = openId === entry.id;
-                const isTx = transcribingId === entry.id;
-                const showT = expandedTranscript.has(entry.id);
-                return (
-                  <li
-                    key={entry.id}
-                    className="rounded-xl border border-border bg-card p-4 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{entry.title}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {formatDate(entry.createdAt)} · {formatDuration(entry.durationMs)}
-                          {entry.transcript && (
-                            <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                              Transcribed
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <IconButton
-                          onClick={() => setOpenId(isOpen ? null : entry.id)}
-                          label={isOpen ? "Close player" : "Play"}
-                        >
-                          {isOpen ? <ChevronUpIcon /> : <PlayIcon />}
-                        </IconButton>
-                        <IconButton
-                          onClick={() => void transcribe(entry)}
-                          label="Transcribe"
-                          disabled={isTx}
-                        >
-                          {isTx ? <Spinner /> : <TextIcon />}
-                        </IconButton>
-                        <IconButton onClick={() => void onRename(entry)} label="Rename">
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton onClick={() => void onDelete(entry.id)} label="Delete" destructive>
-                          <TrashIcon />
-                        </IconButton>
-                      </div>
-                    </div>
-
-                    {isOpen && <AudioPlayer blob={entry.blob} onClose={() => setOpenId(null)} />}
-
-                    {entry.transcriptStatus === "pending" && (
-                      <p className="mt-3 text-xs text-muted-foreground">Transcribing…</p>
-                    )}
-                    {entry.transcriptError && entry.transcriptStatus === "error" && (
-                      <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
-                        {entry.transcriptError}
-                      </p>
-                    )}
-                    {entry.transcript && (
-                      <div className="mt-3 rounded-lg bg-muted/40 p-3">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            Transcript
-                          </span>
-                          <div className="flex items-center gap-3">
-                            {editingId !== entry.id && (
-                              <button
-                                onClick={() => {
-                                  setEditingId(entry.id);
-                                  setDraftTranscript(entry.transcript ?? "");
-                                  setExpandedTranscript((s) => new Set(s).add(entry.id));
-                                }}
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
-                              >
-                                Edit
-                              </button>
-                            )}
-                            {editingId !== entry.id && (
-                              <button
-                                onClick={() => {
-                                  setExpandedTranscript((s) => {
-                                    const next = new Set(s);
-                                    if (next.has(entry.id)) next.delete(entry.id);
-                                    else next.add(entry.id);
-                                    return next;
-                                  });
-                                }}
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
-                              >
-                                {showT ? "Collapse" : "Expand"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {editingId === entry.id ? (
-                          <div>
-                            <textarea
-                              value={draftTranscript}
-                              onChange={(e) => setDraftTranscript(e.target.value)}
-                              rows={Math.min(20, Math.max(6, draftTranscript.split("\n").length + 2))}
-                              className="w-full resize-y rounded-md border border-border bg-background p-2 font-serif text-sm leading-relaxed outline-none focus:border-ring"
-                              placeholder="Edit your transcript…"
-                            />
-                            <div className="mt-2 flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => {
-                                  setEditingId(null);
-                                  setDraftTranscript("");
-                                }}
-                                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const text = draftTranscript.trim();
-                                  await updateEntry(entry.id, {
-                                    transcript: text,
-                                    transcriptStatus: text ? "done" : "none",
-                                    transcriptError: undefined,
-                                  });
-                                  setEditingId(null);
-                                  setDraftTranscript("");
-                                  await refresh();
-                                }}
-                                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p
-                            className={`whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/90 ${
-                              showT ? "" : "line-clamp-3"
-                            }`}
-                          >
-                            {highlight(entry.transcript ?? "", query)}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <EntryList
+            entries={recent}
+            onChange={refresh}
+            compact
+            emptyMessage="No recordings yet. Tap the mic above to start your first entry."
+          />
         </section>
 
-        <footer className="mt-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
-          <Link
-            to="/privacy"
-            className="underline underline-offset-4 hover:text-foreground"
-          >
+        <footer className="mt-8 flex flex-col items-center gap-1.5 text-center text-[11px] text-muted-foreground">
+          <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
             Privacy Policy
           </Link>
-          <span>Voice Journal · Private, on-device</span>
+          <span>DearMe · Private, on-device</span>
         </footer>
       </div>
+
+      <BottomTabs onOpenSettings={() => setSettingsOpen(true)} />
+      {settingsOpen && <PWASettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
 
-function LanguageSelector() {
-  const [lang, setLang] = useState<string>(() => getSettings().transcriptionLanguage);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => onSettingsChange((s) => setLang(s.transcriptionLanguage)), []);
-
-  const current = LANGUAGES.find((l) => l.code === lang) ?? LANGUAGES[0];
-  const isAuto = !lang;
-
+function MicIcon({ className = "h-6 w-6" }: { className?: string }) {
   return (
-    <div className="mt-4 w-full">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-label="Change transcription language"
-        className="group flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs backdrop-blur hover:bg-accent"
-      >
-        <span className="flex items-center gap-2">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-muted-foreground">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" strokeLinecap="round" />
-          </svg>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Transcription
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              isAuto ? "bg-primary/15 text-primary" : "bg-accent text-foreground"
-            }`}
-          >
-            {isAuto ? "Auto-detect" : current.label}
-          </span>
-        </span>
-        <span className="text-[11px] text-muted-foreground group-hover:text-foreground">
-          {open ? "Close" : "Change"}
-        </span>
-      </button>
-      {open && (
-        <select
-          autoFocus
-          value={lang}
-          onChange={(e) => {
-            setSettings({ transcriptionLanguage: e.target.value });
-            setOpen(false);
-          }}
-          className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.code || "auto"} value={l.code}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-      )}
-    </div>
-  );
-}
-
-function highlight(text: string, query: string) {
-  const q = query.trim();
-  if (!q) return text;
-  const parts: ReactNode[] = [];
-  const re = new RegExp(`(${escapeRegExp(q)})`, "ig");
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let i = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(
-      <mark key={i++} className="rounded bg-primary/25 px-0.5 text-foreground">
-        {m[0]}
-      </mark>,
-    );
-    last = m.index + m[0].length;
-    if (m.index === re.lastIndex) re.lastIndex++;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
-}
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function IconButton({
-  children,
-  onClick,
-  label,
-  destructive,
-  disabled,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  label: string;
-  destructive?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg border border-transparent transition-colors hover:bg-background disabled:opacity-40 ${
-        destructive ? "text-destructive hover:border-destructive/30" : ""
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function MicIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className={className}>
       <rect x="9" y="3" width="6" height="12" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0" strokeLinecap="round" />
       <path d="M12 18v3" strokeLinecap="round" />
     </svg>
   );
 }
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
-}
-function ChevronUpIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-      <path d="M6 15l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-      <path d="M3 6h18M8 6V4h8v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" strokeLinecap="round" />
-    </svg>
-  );
-}
-function EditIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-      <path d="M4 20h4l10-10-4-4L4 16v4z" strokeLinejoin="round" />
-    </svg>
-  );
-}
 function UploadIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
       <path d="M12 16V4M6 10l6-6 6 6M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
-function TextIcon() {
+function ShieldIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-      <path d="M4 6h16M4 12h10M4 18h16" strokeLinecap="round" />
-    </svg>
-  );
-}
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-function Spinner() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 animate-spin">
-      <path d="M12 3a9 9 0 1 0 9 9" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-3.5 w-3.5">
+      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" strokeLinejoin="round" />
     </svg>
   );
 }
