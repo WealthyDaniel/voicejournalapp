@@ -51,39 +51,39 @@
 
 :root {
   --radius: 1rem;
-  /* Deep midnight navy with electric neon-blue accent */
-  --background: oklch(0.16 0.04 260);
-  --foreground: oklch(0.97 0.01 250);
-  --card: oklch(0.21 0.045 262);
-  --card-foreground: oklch(0.97 0.01 250);
-  --popover: oklch(0.19 0.045 262);
-  --popover-foreground: oklch(0.97 0.01 250);
-  --primary: oklch(0.72 0.19 245);
-  --primary-foreground: oklch(0.14 0.05 260);
-  --secondary: oklch(0.26 0.05 262);
-  --secondary-foreground: oklch(0.97 0.01 250);
-  --muted: oklch(0.24 0.04 262);
-  --muted-foreground: oklch(0.72 0.03 250);
-  --accent: oklch(0.34 0.09 250);
-  --accent-foreground: oklch(0.97 0.01 250);
+  /* DearMe: deep charcoal shell with warm cream card + sand accent */
+  --background: oklch(0.16 0.005 60);
+  --foreground: oklch(0.97 0.01 80);
+  --card: oklch(0.94 0.02 75);
+  --card-foreground: oklch(0.22 0.02 60);
+  --popover: oklch(0.22 0.01 60);
+  --popover-foreground: oklch(0.97 0.01 80);
+  --primary: oklch(0.78 0.06 70);
+  --primary-foreground: oklch(0.22 0.02 60);
+  --secondary: oklch(0.24 0.01 60);
+  --secondary-foreground: oklch(0.97 0.01 80);
+  --muted: oklch(0.22 0.01 60);
+  --muted-foreground: oklch(0.7 0.02 70);
+  --accent: oklch(0.28 0.02 60);
+  --accent-foreground: oklch(0.97 0.01 80);
   --destructive: oklch(0.66 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 250);
+  --destructive-foreground: oklch(0.98 0.01 80);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.72 0.19 245);
-  --chart-1: oklch(0.72 0.19 245);
-  --chart-2: oklch(0.7 0.14 210);
-  --chart-3: oklch(0.75 0.15 195);
-  --chart-4: oklch(0.65 0.2 275);
-  --chart-5: oklch(0.68 0.18 230);
-  --sidebar: oklch(0.19 0.045 262);
-  --sidebar-foreground: oklch(0.97 0.01 250);
-  --sidebar-primary: oklch(0.72 0.19 245);
-  --sidebar-primary-foreground: oklch(0.14 0.05 260);
-  --sidebar-accent: oklch(0.28 0.06 262);
-  --sidebar-accent-foreground: oklch(0.97 0.01 250);
+  --ring: oklch(0.78 0.06 70);
+  --chart-1: oklch(0.78 0.06 70);
+  --chart-2: oklch(0.72 0.05 60);
+  --chart-3: oklch(0.65 0.04 50);
+  --chart-4: oklch(0.55 0.03 45);
+  --chart-5: oklch(0.85 0.04 80);
+  --sidebar: oklch(0.19 0.008 60);
+  --sidebar-foreground: oklch(0.97 0.01 80);
+  --sidebar-primary: oklch(0.78 0.06 70);
+  --sidebar-primary-foreground: oklch(0.22 0.02 60);
+  --sidebar-accent: oklch(0.26 0.01 60);
+  --sidebar-accent-foreground: oklch(0.97 0.01 80);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.72 0.19 245);
+  --sidebar-ring: oklch(0.78 0.06 70);
 }
 
 @layer base {
@@ -99,11 +99,6 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
-    background-image:
-      radial-gradient(ellipse 90% 60% at 20% 0%, oklch(0.45 0.2 245 / 0.35), transparent 60%),
-      radial-gradient(ellipse 80% 50% at 100% 30%, oklch(0.4 0.18 270 / 0.28), transparent 65%),
-      radial-gradient(ellipse 100% 60% at 50% 100%, oklch(0.35 0.15 220 / 0.35), transparent 70%);
-    background-attachment: fixed;
     min-height: 100vh;
   }
 
@@ -114,6 +109,7 @@
     font-weight: 500;
   }
 }
+
 
 /* Neon glow utilities used by recording UI */
 @utility glow-ring {

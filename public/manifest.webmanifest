@@ -1,13 +1,13 @@
 {
-  "name": "Voice Journal",
-  "short_name": "Journal",
+  "name": "DearMe",
+  "short_name": "DearMe",
   "description": "Private, on-device voice journal. Record, replay, and reflect.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b1226",
-  "theme_color": "#0b1226",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
   "categories": ["lifestyle", "productivity", "health"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

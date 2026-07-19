@@ -23,7 +23,7 @@ export function PWASettingsButton() {
   );
 }
 
-function PWASettingsModal({ onClose }: { onClose: () => void }) {
+export function PWASettingsModal({ onClose }: { onClose: () => void }) {
   const [settings, setLocal] = useState<PWASettings>(() => getSettings());
   const [installed, setInstalled] = useState<boolean>(false);
   const [swActive, setSwActive] = useState<boolean>(false);
