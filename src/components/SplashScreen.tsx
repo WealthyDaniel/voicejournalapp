@@ -54,11 +54,12 @@ export function SplashScreen({ minDurationMs = 1200 }: { minDurationMs?: number 
           />
         </div>
         <p className="mt-6 font-serif text-lg tracking-wide text-foreground/90">
-          Voice Journal
+          DearMe
         </p>
         <p className="mt-1 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
           Private · On-device
         </p>
+
       </div>
       <style>{`
         @keyframes vj-splash-pulse {
