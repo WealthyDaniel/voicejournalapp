@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
  * Animated splash shown on first paint. Hides itself after a short
  * initialization window so the main UI renders behind it.
  */
-export function SplashScreen({ minDurationMs = 1200 }: { minDurationMs?: number }) {
+export function SplashScreen({ minDurationMs = 500 }: { minDurationMs?: number }) {
   const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
     const t1 = window.setTimeout(() => setFading(true), minDurationMs);
-    const t2 = window.setTimeout(() => setVisible(false), minDurationMs + 450);
+    const t2 = window.setTimeout(() => setVisible(false), minDurationMs + 250);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
