@@ -12,7 +12,7 @@ export function BottomTabs({ onOpenSettings }: { onOpenSettings?: () => void }) 
         aria-label="Primary"
       >
         <ul className="mx-auto flex max-w-md items-stretch justify-around px-4 py-2">
-          <Tab to="/" active={pathname === "/"} label="Record" icon={<MicIcon />} />
+          <Tab to="/" active={pathname === "/"} label="Journal" icon={<MicIcon />} />
           <Tab to="/history" active={pathname.startsWith("/history")} label="History" icon={<ClockIcon />} />
           <TabButton onClick={onOpenSettings} label="Settings" icon={<GearIcon />} />
         </ul>
