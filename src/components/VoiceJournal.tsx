@@ -24,7 +24,7 @@ export function VoiceJournal() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setShowSplash(false), 1650);
+    const t = window.setTimeout(() => setShowSplash(false), 750);
     return () => window.clearTimeout(t);
   }, []);
 

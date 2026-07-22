@@ -88,22 +88,22 @@ export function InstallPrompt() {
         className="w-full max-w-md rounded-2xl border border-border bg-card/95 p-4 shadow-2xl backdrop-blur-md"
         style={{ animation: "soothe-in 0.4s ease-out" }}
         role="dialog"
-        aria-label="Install Voice Journal"
+        aria-label="Install DearMe"
       >
         <div className="flex items-start gap-3">
           <img
-            src="/logo.png"
+            src="/icon-192.png"
             alt=""
             className="h-12 w-12 shrink-0 rounded-xl object-contain shadow-sm"
           />
           <div className="min-w-0 flex-1">
             <h3 className="font-serif text-base font-medium leading-tight">
-              Install Voice Journal
+              Install DearMe
             </h3>
             <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
               {ios
-                ? "Tap Share, then “Add to Home Screen” to keep your journal one tap away."
-                : "Add to your home screen for a calmer, full-screen journaling space."}
+                ? "Tap Share, then “Add to Home Screen” to keep DearMe one tap away."
+                : "Add DearMe to your home screen for a calmer, full-screen journaling space."}
             </p>
             <div className="mt-3 flex items-center justify-end gap-2">
               <button

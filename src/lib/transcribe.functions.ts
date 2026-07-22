@@ -30,7 +30,7 @@ export const transcribeAudio = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
     const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Transcription is not configured on this device.");
+    if (!key) throw new Error("Transcription is temporarily unavailable. Please try again in a moment.");
 
     const buffer = base64ToArrayBuffer(data.audioBase64);
     if (buffer.byteLength < 512) {
