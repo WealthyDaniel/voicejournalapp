@@ -54,8 +54,8 @@
   /* DearMe: deep charcoal shell with warm cream card + sand accent */
   --background: oklch(0.16 0.005 60);
   --foreground: oklch(0.97 0.01 80);
-  --card: oklch(0.94 0.02 75);
-  --card-foreground: oklch(0.22 0.02 60);
+  --card: oklch(0.11 0.005 60);
+  --card-foreground: oklch(0.97 0.01 80);
   --popover: oklch(0.22 0.01 60);
   --popover-foreground: oklch(0.97 0.01 80);
   --primary: oklch(0.78 0.06 70);
