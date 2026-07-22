@@ -32,7 +32,8 @@ export function VoiceJournal() {
     (async () => {
       const has = await hasPasscode();
       setLockConfigured(has);
-      setLocked(has);
+      const sessionUnlocked = sessionStorage.getItem("dearme:unlocked") === "1";
+      setLocked(has && !sessionUnlocked);
       setCheckingLock(false);
     })();
   }, []);
