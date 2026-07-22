@@ -52,6 +52,7 @@ export function VoiceJournal() {
         {showSplash && <SplashScreen />}
         <LockScreen
           onUnlocked={async () => {
+            sessionStorage.setItem("dearme:unlocked", "1");
             setLocked(false);
             setLockConfigured(await hasPasscode());
           }}
@@ -64,6 +65,7 @@ export function VoiceJournal() {
       {showSplash && <SplashScreen />}
       <RecorderScreen
         onLock={() => {
+          sessionStorage.removeItem("dearme:unlocked");
           setLocked(true);
         }}
       />
